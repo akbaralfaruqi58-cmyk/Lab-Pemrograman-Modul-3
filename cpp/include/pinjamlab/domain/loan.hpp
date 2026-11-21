@@ -12,9 +12,13 @@ class Loan {
     std::string id_;
     std::string tag_;
     std::string memberId_;
-    int days_;
+    int days_ = 0;
 
 public:
+    // Required by the from-scratch Result<T> failure representation.
+    // A default Loan is never exposed as a success value.
+    Loan() = default;
+
     Loan(std::string id, std::string tag, std::string memberId, int days)
         : id_(std::move(id)), tag_(std::move(tag)),
           memberId_(std::move(memberId)), days_(days) {}

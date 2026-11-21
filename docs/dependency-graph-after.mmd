@@ -1,0 +1,6 @@
+flowchart TD
+    APP["app: runner / main"] -->|calls borrow; checks Result<Loan>| SERVICE["service: LoanService"]
+    APP --> IO["io: CsvReader / Validator / ReportWriter"]
+    APP --> DOMAIN["domain: Result / LoanError / entities"]
+    SERVICE --> DOMAIN
+    IO --> DOMAIN

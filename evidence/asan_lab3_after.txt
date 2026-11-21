@@ -1,0 +1,2 @@
+caught: simulated failure after RAII allocation
+live objects after exception: 0

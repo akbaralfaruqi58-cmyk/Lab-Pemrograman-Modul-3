@@ -7,6 +7,8 @@
 #include "mini_catch.hpp"
 #include "pinjamlab/domain/result.hpp"
 #include "pinjamlab/io/validator.hpp"
+#include "pinjamlab/app/seed.hpp"
+#include "pinjamlab/service/loan_service.hpp"
 
 #include <stdexcept>
 #include <string>
@@ -84,6 +86,40 @@ TEST_CASE("From-scratch match: Result and throwing agree on every malformed inpu
         REQUIRE(!throwingError.empty());
         REQUIRE(r.error() == throwingError);
     }
+}
+
+
+TEST_CASE("EquipmentUnavailable Result matches the prior throwing behavior") {
+    LoanService resultService;
+    seedPinjamLab(resultService);
+    const auto outcome = resultService.borrow("LP-002", "M-101", 7);
+    REQUIRE(!outcome.ok());
+    REQUIRE(outcome.error() == "Equipment already on loan: LP-002");
+
+    LoanService throwingService;
+    seedPinjamLab(throwingService);
+    std::string throwingMessage;
+    try {
+        (void)throwingService.borrowThrowingForComparison("LP-002", "M-101", 7);
+    } catch (const EquipmentUnavailable& e) {
+        throwingMessage = e.what();
+    }
+    REQUIRE(throwingMessage == outcome.error());
+}
+
+TEST_CASE("EquipmentUnavailable Result preserves successful Loan values") {
+    LoanService resultService;
+    seedPinjamLab(resultService);
+    const auto outcome = resultService.borrow("LP-001", "M-101", 7);
+    REQUIRE(outcome.ok());
+
+    LoanService throwingService;
+    seedPinjamLab(throwingService);
+    const Loan oldShape = throwingService.borrowThrowingForComparison("LP-001", "M-101", 7);
+    REQUIRE(outcome.value().id() == oldShape.id());
+    REQUIRE(outcome.value().tag() == oldShape.tag());
+    REQUIRE(outcome.value().memberId() == oldShape.memberId());
+    REQUIRE(outcome.value().days() == oldShape.days());
 }
 
 int main() { return test_runner::runAll(); }

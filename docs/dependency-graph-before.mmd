@@ -1,0 +1,6 @@
+flowchart TD
+    APP["app"] --> SERVICE["service"]
+    APP --> IO["io"]
+    APP --> DOMAIN["domain"]
+    SERVICE --> DOMAIN
+    IO --> DOMAIN

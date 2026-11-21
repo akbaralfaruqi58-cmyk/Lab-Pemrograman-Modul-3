@@ -45,5 +45,5 @@ def test_loan_service_borrow_commits_the_ledger_on_success():
     svc = LoanService()
     svc.add_equipment(Equipment("LP-001", "ThinkPad T14"))
     svc.add_member(Member("M-101", "Ayu Lestari", Role.STUDENT))
-    svc.borrow("LP-001", "M-101", 7)
+    svc.borrow("LP-001", "M-101", 7).value
     assert len(svc.ledger.committed) == 2  # "loan:" and "equipment:" records

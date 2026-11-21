@@ -1,0 +1,80 @@
+================================================================================
+ [PinjamLab M3] g++ (Debian 14.2.0-19) 14.2.0
+ [PinjamLab M3] Python 3.13.5
+================================================================================
+
+>>> [1/6] Dependency-rule purity check (C++ includes + Python imports)
+PASS: domain/ depends only on domain and standard non-I/O types.
+PASS: no imports/includes from io, service, or app; no direct file/console I/O.
+
+>>> [2/6] Building C++20 tests (-Wall -Wextra -Werror)
+
+>>> [3/6] Running C++20 test suites
+===============================================================================
+Running test suite (12 test cases)...
+===============================================================================
+PASSED: UnknownAssetTag: unknown tag, carries the tag
+PASSED: UnknownMember: unknown member, carries the id
+PASSED: InvalidLoanDuration: business-rule maximum, not the format check
+PASSED: EquipmentUnavailable is an expected Result failure
+PASSED: QuotaExceeded: over quota, carries active and limit
+PASSED: ReservationConflict carries reservation ownership context
+PASSED: A reservation holder can borrow and reservation is cleared
+PASSED: FineCapReached carries the loan id, calculated fine, and cap
+PASSED: Fine calculation returns the amount while it remains under the cap
+PASSED: Every concrete error is catchable as the LoanError family
+PASSED: Catch order: most-specific handler runs when listed first
+PASSED: A successful borrow raises nothing and updates both entities
+===============================================================================
+All tests finished: 12 passed, 0 failed.
+===============================================================================
+===============================================================================
+Running test suite (4 test cases)...
+===============================================================================
+PASSED: TxnGuard commits: staged records become committed
+PASSED: TxnGuard rolls back on normal scope exit without commit()
+PASSED: TxnGuard rolls back when an exception unwinds through it
+PASSED: LoanService.borrow() commits the ledger on success
+===============================================================================
+All tests finished: 4 passed, 0 failed.
+===============================================================================
+===============================================================================
+Running test suite (7 test cases)...
+===============================================================================
+PASSED: Result::success carries a value and ok() is true
+PASSED: Result::failure carries a message and ok() is false
+PASSED: value() on a failed Result throws, rather than returning garbage
+PASSED: From-scratch match: Result and throwing agree on well-formed input
+PASSED: From-scratch match: Result and throwing agree on every malformed input
+PASSED: EquipmentUnavailable Result matches the prior throwing behavior
+PASSED: EquipmentUnavailable Result preserves successful Loan values
+===============================================================================
+All tests finished: 7 passed, 0 failed.
+===============================================================================
+===============================================================================
+Running test suite (5 test cases)...
+===============================================================================
+PASSED: bad-requests.csv reproduces expected-output.txt byte for byte
+PASSED: my-bad-requests.csv reports all five custom failures
+PASSED: app catches ReservationConflict and reports its structured context
+PASSED: app FineCapReached handler uses structured values
+PASSED: unexpected input-file errors are not swallowed by app
+===============================================================================
+All tests finished: 5 passed, 0 failed.
+===============================================================================
+
+>>> [4/6] Checking fixed and student-authored CSV outputs
+  match: sample-data/bad-requests.csv -> sample-data/expected-output.txt
+  match: sample-data/my-bad-requests.csv -> sample-data/my-expected-output.txt
+
+>>> [5/6] Running Python test suite
+...............................                                          [100%]
+31 passed in 0.08s
+
+>>> [6/6] Defect B: reproduce raw-pointer leak, then verify RAII cleanup
+  reproduced: ASan reports the raw-pointer leak (bin/asan_before.txt)
+  fixed: unique_ptr path exits cleanly (bin/asan_after.txt)
+
+================================================================================
+ [SUCCESS] Labs 1–3 checks passed: dependency rule, Result refactor, tests, golden output, and cleanup evidence.
+================================================================================

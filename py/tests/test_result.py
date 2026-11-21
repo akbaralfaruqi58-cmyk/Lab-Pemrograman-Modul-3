@@ -5,6 +5,9 @@ based rule and a throwing equivalent agree on every input -- the
 import pytest
 
 from pinjamlab.domain.result import Result
+from pinjamlab.domain.loan_error import EquipmentUnavailable
+from pinjamlab.app.seed import seed_pinjamlab
+from pinjamlab.service.loan_service import LoanService
 from pinjamlab.io.csv_reader import RawRow
 from pinjamlab.io.validator import Validator
 
@@ -49,6 +52,33 @@ def test_from_scratch_match_agree_on_well_formed_input():
     assert r.ok
     assert r.value.days == 7
     assert parse_days_or_raise("7") == 7
+
+
+
+def test_equipment_unavailable_result_matches_prior_throwing_behavior():
+    result_service = LoanService()
+    seed_pinjamlab(result_service)
+    outcome = result_service.borrow("LP-002", "M-101", 7)
+    assert not outcome.ok
+    assert outcome.error == "Equipment already on loan: LP-002"
+
+    throwing_service = LoanService()
+    seed_pinjamlab(throwing_service)
+    with pytest.raises(EquipmentUnavailable) as exc:
+        throwing_service.borrow_throwing_for_comparison("LP-002", "M-101", 7)
+    assert str(exc.value) == outcome.error
+
+
+def test_equipment_unavailable_result_preserves_successful_loan_values():
+    result_service = LoanService()
+    seed_pinjamlab(result_service)
+    outcome = result_service.borrow("LP-001", "M-101", 7)
+    assert outcome.ok
+
+    throwing_service = LoanService()
+    seed_pinjamlab(throwing_service)
+    old_shape = throwing_service.borrow_throwing_for_comparison("LP-001", "M-101", 7)
+    assert outcome.value == old_shape
 
 
 @pytest.mark.parametrize("raw", ["abc", "-3", "0", "2147483648"])

@@ -1,0 +1,17 @@
+Lab 3.2 negative verification of the dependency-rule checker
+
+Python probe:
+  Temporary source: py/pinjamlab/domain/_lab3_purity_probe.py
+  Injected import: from ..io.csv_reader import RawRow
+  Expected result: checker exits non-zero and names the domain -> io import.
+  Observed: PASS - the checker rejected the injected import.
+
+C++ probe:
+  Temporary source: cpp/include/pinjamlab/domain/_lab3_purity_probe.hpp
+  Injected include: #include "pinjamlab/io/csv_reader.hpp"
+  Expected result: checker exits non-zero and names the domain -> io include.
+  Observed: PASS - the checker rejected the injected include.
+
+After both temporary probes were removed:
+  python scripts/check_dependencies.py
+  Observed: PASS - both language domain folders are pure.

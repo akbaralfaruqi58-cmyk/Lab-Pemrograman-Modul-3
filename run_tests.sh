@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PinjamLab Module 3: complete verification for Labs 1–2.
+# PinjamLab Module 3: complete verification for Labs 1–3.
 # The script fails loudly if purity, C++ tests, golden outputs, Python tests,
 # or cleanup/leak evidence checks do not pass.
 set -euo pipefail
@@ -17,39 +17,10 @@ echo " [PinjamLab M3] $("$CXX" --version | head -1)"
 echo " [PinjamLab M3] $("$PY" --version 2>&1)"
 echo "================================================================================"
 
-# ---- 1/6: dependency rule -----------------------------------------------------
+# ---- 1/6: dependency-rule purity check --------------------------------------
 echo ""
-echo ">>> [1/6] Dependency-rule purity check"
-check_purity() {
-    local dir="$1" lang="$2" found=0 pattern
-    if [ "$lang" = "cpp" ]; then
-        pattern='#include[[:space:]]*[<"](fstream|iostream|sstream)[>"]|std::cout|std::cerr|std::cin|[Cc][Ss][Vv]'
-    else
-        pattern='^[[:space:]]*(import|from)[[:space:]]+(csv|sys)\b|\bprint\(|\bopen\('
-    fi
-    while IFS= read -r hit; do
-        local file="${hit%%:*}" rest="${hit#*:}" content trimmed
-        rest="${rest#*:}"
-        content="$rest"
-        trimmed="$(echo "$content" | sed -E 's/^[[:space:]]*//')"
-        if [ "$lang" = "cpp" ]; then
-            case "$trimmed" in '//'*) continue ;; esac
-        else
-            case "$trimmed" in '#'*) continue ;; esac
-        fi
-        echo "  PURITY VIOLATION: $file: $content"
-        found=1
-    done < <(grep -rnE --exclude-dir=__pycache__ --exclude='*.pyc' "$pattern" "$dir" 2>/dev/null || true)
-    return "$found"
-}
-purity_failed=0
-check_purity cpp/include/pinjamlab/domain cpp || purity_failed=1
-check_purity py/pinjamlab/domain py || purity_failed=1
-if [ "$purity_failed" -ne 0 ]; then
-    echo "FATAL: domain/ is no longer pure."
-    exit 3
-fi
-echo "  clean: domain/ has no file, console, or CSV dependencies."
+echo ">>> [1/6] Dependency-rule purity check (C++ includes + Python imports)"
+"$PY" scripts/check_dependencies.py
 
 # ---- 2/6: build C++ suites ----------------------------------------------------
 echo ""
@@ -144,5 +115,5 @@ fi
 
 echo ""
 echo "================================================================================"
-echo " [SUCCESS] Lab 2 checks passed: exceptions, Result, cleanup, diagnostics, and leak evidence."
+echo " [SUCCESS] Labs 1–3 checks passed: dependency rule, Result refactor, tests, golden output, and cleanup evidence."
 echo "================================================================================"

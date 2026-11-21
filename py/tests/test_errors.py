@@ -45,11 +45,11 @@ def test_invalid_loan_duration_is_the_business_rule_maximum():
     assert str(exc.value) == "Loan duration exceeds maximum: 400 > 90"
 
 
-def test_equipment_unavailable_carries_the_tag():
+def test_equipment_unavailable_is_an_expected_result_failure():
     svc = seeded()  # LP-002 was loaned to M-103 during seeding
-    with pytest.raises(EquipmentUnavailable) as exc:
-        svc.borrow("LP-002", "M-101", 7)
-    assert exc.value.tag == "LP-002"
+    outcome = svc.borrow("LP-002", "M-101", 7)
+    assert not outcome.ok
+    assert outcome.error == "Equipment already on loan: LP-002"
 
 
 def test_quota_exceeded_carries_active_and_limit():
@@ -78,14 +78,14 @@ def test_reservation_conflict_carries_reservation_ownership_context():
 def test_reservation_holder_can_borrow_and_reservation_is_cleared():
     svc = seeded()
     svc.reserve_equipment("LP-001", "M-101")
-    loan = svc.borrow("LP-001", "M-101", 7)
+    loan = svc.borrow("LP-001", "M-101", 7).value
     assert loan.tag == "LP-001"
     assert svc.find_equipment("LP-001").reserved_by is None
 
 
 def test_fine_cap_reached_carries_structured_values():
     svc = seeded()
-    loan = svc.borrow("LP-001", "M-101", 7)
+    loan = svc.borrow("LP-001", "M-101", 7).value
 
     with pytest.raises(FineCapReached) as exc:
         svc.calculate_fine_cents(loan, 5, 250, 1000)
@@ -97,15 +97,15 @@ def test_fine_cap_reached_carries_structured_values():
 
 def test_fine_calculation_returns_amount_below_cap():
     svc = seeded()
-    loan = svc.borrow("LP-001", "M-101", 7)
+    loan = svc.borrow("LP-001", "M-101", 7).value
     assert svc.calculate_fine_cents(loan, 3, 250, 1000) == 750
 
 
 def test_every_concrete_error_is_catchable_as_the_loan_error_family():
     svc = seeded()
     cases = [
-        ("LP-999", "M-101", 7), ("LP-001", "M-404", 7), ("LP-001", "M-101", 400),
-        ("LP-002", "M-101", 7), ("LP-003", "M-102", 7),
+        ("LP-999", "M-101", 7), ("LP-001", "M-404", 7),
+        ("LP-001", "M-101", 400), ("LP-003", "M-102", 7),
     ]
     caught_as_family = 0
     for tag, member, days in cases:
@@ -113,7 +113,7 @@ def test_every_concrete_error_is_catchable_as_the_loan_error_family():
             svc.borrow(tag, member, days)
         except LoanError:
             caught_as_family += 1
-    assert caught_as_family == 5
+    assert caught_as_family == 4
 
 
 def test_a_bare_except_would_also_catch_keyboard_interrupt_dont_write_one():
@@ -127,7 +127,7 @@ def test_a_bare_except_would_also_catch_keyboard_interrupt_dont_write_one():
 
 def test_a_successful_borrow_raises_nothing_and_updates_both_entities():
     svc = seeded()
-    loan = svc.borrow("LP-001", "M-101", 7)
+    loan = svc.borrow("LP-001", "M-101", 7).value
     assert loan.tag == "LP-001"
     assert loan.member_id == "M-101"
     assert svc.find_equipment("LP-001").is_available() is False

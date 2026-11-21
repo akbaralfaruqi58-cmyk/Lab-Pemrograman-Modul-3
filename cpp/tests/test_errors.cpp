@@ -46,14 +46,11 @@ TEST_CASE("InvalidLoanDuration: business-rule maximum, not the format check") {
     }
 }
 
-TEST_CASE("EquipmentUnavailable: already on loan, carries the tag") {
+TEST_CASE("EquipmentUnavailable is an expected Result failure") {
     LoanService svc = seeded();  // LP-002 was loaned to M-103 during seeding
-    try {
-        (void)svc.borrow("LP-002", "M-101", 7);
-        REQUIRE(false);
-    } catch (const EquipmentUnavailable& e) {
-        REQUIRE(e.tag() == "LP-002");
-    }
+    const auto outcome = svc.borrow("LP-002", "M-101", 7);
+    REQUIRE(!outcome.ok());
+    REQUIRE(outcome.error() == "Equipment already on loan: LP-002");
 }
 
 TEST_CASE("QuotaExceeded: over quota, carries active and limit") {
@@ -85,14 +82,14 @@ TEST_CASE("ReservationConflict carries reservation ownership context") {
 TEST_CASE("A reservation holder can borrow and reservation is cleared") {
     LoanService svc = seeded();
     svc.reserveEquipment("LP-001", "M-101");
-    const Loan loan = svc.borrow("LP-001", "M-101", 7);
+    const Loan loan = svc.borrow("LP-001", "M-101", 7).value();
     REQUIRE(loan.tag() == "LP-001");
     REQUIRE(svc.findEquipment("LP-001")->reservedBy().empty());
 }
 
 TEST_CASE("FineCapReached carries the loan id, calculated fine, and cap") {
     LoanService svc = seeded();
-    const Loan loan = svc.borrow("LP-001", "M-101", 7);
+    const Loan loan = svc.borrow("LP-001", "M-101", 7).value();
     try {
         (void)svc.calculateFineCents(loan, 5, 250, 1000);
         REQUIRE(false);
@@ -115,8 +112,8 @@ TEST_CASE("Every concrete error is catchable as the LoanError family") {
     LoanService svc = seeded();
     int caughtAsFamily = 0;
     const struct { const char* tag; const char* member; int days; } cases[] = {
-        {"LP-999", "M-101", 7}, {"LP-001", "M-404", 7}, {"LP-001", "M-101", 400},
-        {"LP-002", "M-101", 7}, {"LP-003", "M-102", 7},
+        {"LP-999", "M-101", 7}, {"LP-001", "M-404", 7},
+        {"LP-001", "M-101", 400}, {"LP-003", "M-102", 7},
     };
     for (const auto& c : cases) {
         try {
@@ -125,7 +122,7 @@ TEST_CASE("Every concrete error is catchable as the LoanError family") {
             ++caughtAsFamily;
         }
     }
-    REQUIRE(caughtAsFamily == 5);
+    REQUIRE(caughtAsFamily == 4);
 }
 
 TEST_CASE("Catch order: most-specific handler runs when listed first") {
@@ -148,7 +145,7 @@ TEST_CASE("Catch order: most-specific handler runs when listed first") {
 
 TEST_CASE("A successful borrow raises nothing and updates both entities") {
     LoanService svc = seeded();
-    const Loan loan = svc.borrow("LP-001", "M-101", 7);
+    const Loan loan = svc.borrow("LP-001", "M-101", 7).value();
     REQUIRE(loan.tag() == "LP-001");
     REQUIRE(loan.memberId() == "M-101");
     REQUIRE(svc.findEquipment("LP-001")->isAvailable() == false);

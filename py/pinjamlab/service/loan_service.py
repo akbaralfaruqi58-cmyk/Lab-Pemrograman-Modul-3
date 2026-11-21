@@ -1,5 +1,6 @@
-"""Orchestration only: LoanService coordinates domain objects and raises the
-domain's own typed exceptions. No CSV parsing, no console output here.
+"""Orchestration only: coordinate domain objects without CSV or console I/O.
+Expected equipment unavailability is a Result failure; other domain failures
+remain typed exceptions.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ from ..domain.loan_error import (
     UnknownMember,
 )
 from ..domain.member import Member
+from ..domain.result import Result
 from .database import Database
 from .txn_guard import txn_guard
 
@@ -69,7 +71,8 @@ class LoanService:
             raise FineCapReached(loan.loan_id, calculated, cap_cents)
         return calculated
 
-    def borrow(self, tag: str, member_id: str, days: int) -> Loan:
+    def borrow(self, tag: str, member_id: str, days: int) -> Result[Loan]:
+        """Borrow equipment; already-loaned is an expected Result failure."""
         equipment = self._catalog.get(tag)
         if equipment is None:
             raise UnknownAssetTag(tag)
@@ -82,10 +85,10 @@ class LoanService:
             raise InvalidLoanDuration(days, MAX_LOAN_DAYS)
 
         # Reservation ownership is checked before any mutation.
-        if not equipment.is_available():
-            raise EquipmentUnavailable(tag)
         if equipment.reserved_by is not None and equipment.reserved_by != member_id:
             raise ReservationConflict(tag, equipment.reserved_by, member_id)
+        if not equipment.is_available():
+            return Result.failure(str(EquipmentUnavailable(tag)))
         if not member.can_borrow():
             raise QuotaExceeded(member.active_loans, member.max_loans)
 
@@ -99,7 +102,14 @@ class LoanService:
                 raise
             db.stage(f"equipment:{tag}:loaned")
 
-        return Loan(f"L-{tag}-{member_id}", tag, member_id, days)
+        return Result.success(Loan(f"L-{tag}-{member_id}", tag, member_id, days))
+
+    def borrow_throwing_for_comparison(self, tag: str, member_id: str, days: int) -> Loan:
+        """Test adapter preserving the pre-refactor throwing behaviour."""
+        outcome = self.borrow(tag, member_id, days)
+        if not outcome.ok:
+            raise EquipmentUnavailable(tag)
+        return outcome.value
 
     def return_item(self, tag: str, member_id: str) -> None:
         equipment = self._catalog.get(tag)
