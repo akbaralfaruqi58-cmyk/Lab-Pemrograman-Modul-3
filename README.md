@@ -1,6 +1,6 @@
 # PinjamLab Modul 3 — Penanganan Eksepsi & Pemrograman Modular
 
-Proyek praktikum Laboratorium Pemrograman II. Paket ini mempertahankan struktur kode dosen dan melengkapi artefak Lab 1, Lab 2, serta perubahan perilaku Lab 3 dalam C++20 dan Python 3.12. Snapshot repository dosen sudah memiliki direktori `domain`, `service`, `io`, dan `app`; Lab 3 mendokumentasikan kondisi tersebut secara jujur dan memperkuat pemeriksaan dependency rule, bukan mengklaim memindahkan god file yang tidak ada pada snapshot ini.
+Proyek praktikum Laboratorium Pemrograman II. Paket ini mempertahankan struktur kode dosen dan melengkapi artefak Lab 1, Lab 2, serta perubahan perilaku Lab 3 dalam C++20 dan Python 3.12.
 
 ## Menjalankan pengujian
 
@@ -100,10 +100,3 @@ bertingkat/bertipe, dan mekanisme cleanup C++ RAII dibanding Python `with`.
 Ikuti `REPRODUCE_FROM_CLEAN.md`. Rekan harus clone branch `m3-work`, menjalankan
 `./run_tests.sh`, dan mereproduksi pesan dari `bad-requests.csv` serta
 `my-bad-requests.csv` dengan urutan dan exit code yang sama.
-
-## Bukti dan catatan
-
-Hasil test yang ditampilkan oleh paket disusun di Linux (GNU g++ 14.2.0, Python
-3.13.5, pytest 9.0.2). Jalankan kembali di komputer Windows/MinGW Anda sebelum
-commit. PREDICTION.md wajib di-commit terpisah sebelum commit perubahan implementasi
-Lab 3.1; instruksi urutannya disertakan bersama ZIP.
