@@ -48,7 +48,14 @@ struct RunResult {
         try {
             (void)svc.borrow(req.tag, req.memberId, req.days);
             ++result.created;
-        } catch (const LoanError& e) {  // the family we understand
+        } catch (const ReservationConflict& e) {  // the handler uses structured context
+            ++result.rejected;
+            const std::string message =
+                "Reservation conflict for " + e.tag() + ": reserved by " +
+                e.reservedBy() + ", requested by " + e.requestedBy();
+            result.rejectedLines.push_back(
+                ReportWriter::rejectedLine(row.lineNumber, message));
+        } catch (const LoanError& e) {  // the remaining family we understand
             ++result.rejected;
             result.rejectedLines.push_back(
                 ReportWriter::rejectedLine(row.lineNumber, e.what()));
@@ -57,6 +64,22 @@ struct RunResult {
         // what it is, so we are not entitled to decide it is unimportant.
     }
     return result;
+}
+
+// App-level handler for fine assessment. It translates the typed domain
+// failure into a human-readable message using the exception's structured data.
+[[nodiscard]] inline std::string assessFineForDisplay(
+    const LoanService& svc, const Loan& loan, int overdueDays,
+    long long dailyRateCents, long long capCents) {
+    try {
+        const long long fine = svc.calculateFineCents(
+            loan, overdueDays, dailyRateCents, capCents);
+        return "Fine for " + loan.id() + ": " + std::to_string(fine) + " cents";
+    } catch (const FineCapReached& e) {
+        return "Fine cap reached for " + e.loanId() + ": calculated " +
+               std::to_string(e.calculatedFineCents()) + " cents, cap " +
+               std::to_string(e.capCents()) + " cents";
+    }
 }
 
 }  // namespace pinjamlab

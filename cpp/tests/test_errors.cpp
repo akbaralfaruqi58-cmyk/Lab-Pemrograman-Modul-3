@@ -67,6 +67,50 @@ TEST_CASE("QuotaExceeded: over quota, carries active and limit") {
     }
 }
 
+TEST_CASE("ReservationConflict carries reservation ownership context") {
+    LoanService svc = seeded();
+    svc.reserveEquipment("LP-001", "M-103");
+    try {
+        (void)svc.borrow("LP-001", "M-101", 7);
+        REQUIRE(false);
+    } catch (const ReservationConflict& e) {
+        REQUIRE(e.tag() == "LP-001");
+        REQUIRE(e.reservedBy() == "M-103");
+        REQUIRE(e.requestedBy() == "M-101");
+        REQUIRE(std::string(e.what()) ==
+                "Reservation conflict for LP-001: reserved by M-103, requested by M-101");
+    }
+}
+
+TEST_CASE("A reservation holder can borrow and reservation is cleared") {
+    LoanService svc = seeded();
+    svc.reserveEquipment("LP-001", "M-101");
+    const Loan loan = svc.borrow("LP-001", "M-101", 7);
+    REQUIRE(loan.tag() == "LP-001");
+    REQUIRE(svc.findEquipment("LP-001")->reservedBy().empty());
+}
+
+TEST_CASE("FineCapReached carries the loan id, calculated fine, and cap") {
+    LoanService svc = seeded();
+    const Loan loan = svc.borrow("LP-001", "M-101", 7);
+    try {
+        (void)svc.calculateFineCents(loan, 5, 250, 1000);
+        REQUIRE(false);
+    } catch (const FineCapReached& e) {
+        REQUIRE(e.loanId() == loan.id());
+        REQUIRE(e.calculatedFineCents() == 1250);
+        REQUIRE(e.capCents() == 1000);
+        REQUIRE(std::string(e.what()) ==
+                "Fine cap reached for L-LP-001-M-101: calculated 1250 cents, cap 1000 cents");
+    }
+}
+
+TEST_CASE("Fine calculation returns the amount while it remains under the cap") {
+    LoanService svc = seeded();
+    const Loan loan("L-TEST", "LP-001", "M-101", 7);
+    REQUIRE(svc.calculateFineCents(loan, 3, 250, 1000) == 750);
+}
+
 TEST_CASE("Every concrete error is catchable as the LoanError family") {
     LoanService svc = seeded();
     int caughtAsFamily = 0;

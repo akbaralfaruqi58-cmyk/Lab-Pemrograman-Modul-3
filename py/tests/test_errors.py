@@ -6,6 +6,8 @@ from pinjamlab.domain.loan_error import (
     InvalidLoanDuration,
     LoanError,
     QuotaExceeded,
+    ReservationConflict,
+    FineCapReached,
     UnknownAssetTag,
     UnknownMember,
 )
@@ -56,6 +58,47 @@ def test_quota_exceeded_carries_active_and_limit():
         svc.borrow("LP-003", "M-102", 7)
     assert exc.value.active == 2
     assert exc.value.limit == 2
+
+
+def test_reservation_conflict_carries_reservation_ownership_context():
+    svc = seeded()
+    svc.reserve_equipment("LP-001", "M-103")
+
+    with pytest.raises(ReservationConflict) as exc:
+        svc.borrow("LP-001", "M-101", 7)
+
+    assert exc.value.tag == "LP-001"
+    assert exc.value.reserved_by == "M-103"
+    assert exc.value.requested_by == "M-101"
+    assert str(exc.value) == (
+        "Reservation conflict for LP-001: reserved by M-103, requested by M-101"
+    )
+
+
+def test_reservation_holder_can_borrow_and_reservation_is_cleared():
+    svc = seeded()
+    svc.reserve_equipment("LP-001", "M-101")
+    loan = svc.borrow("LP-001", "M-101", 7)
+    assert loan.tag == "LP-001"
+    assert svc.find_equipment("LP-001").reserved_by is None
+
+
+def test_fine_cap_reached_carries_structured_values():
+    svc = seeded()
+    loan = svc.borrow("LP-001", "M-101", 7)
+
+    with pytest.raises(FineCapReached) as exc:
+        svc.calculate_fine_cents(loan, 5, 250, 1000)
+
+    assert exc.value.loan_id == loan.loan_id
+    assert exc.value.calculated_fine_cents == 1250
+    assert exc.value.cap_cents == 1000
+
+
+def test_fine_calculation_returns_amount_below_cap():
+    svc = seeded()
+    loan = svc.borrow("LP-001", "M-101", 7)
+    assert svc.calculate_fine_cents(loan, 3, 250, 1000) == 750
 
 
 def test_every_concrete_error_is_catchable_as_the_loan_error_family():

@@ -31,7 +31,12 @@ def test_value_on_a_failed_result_raises_rather_than_returning_garbage():
 def parse_days_or_raise(raw: str) -> int:
     """A deliberately duplicated throwing version of Validator's own rule,
     so the two can be compared on the same inputs."""
-    days = int(raw)  # raises ValueError on anything non-numeric
+    try:
+        days = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"days is not a number: {raw}") from exc
+    if days < -2147483648 or days > 2147483647:
+        raise ValueError(f"days is outside supported integer range: {raw}")
     if days <= 0:
         raise ValueError(f"days must be positive, got {days}")
     return days
@@ -46,12 +51,13 @@ def test_from_scratch_match_agree_on_well_formed_input():
     assert parse_days_or_raise("7") == 7
 
 
-@pytest.mark.parametrize("raw", ["abc", "-3", "0"])
+@pytest.mark.parametrize("raw", ["abc", "-3", "0", "2147483648"])
 def test_from_scratch_match_agree_on_every_malformed_input(raw):
     v = Validator()
     row = RawRow(1, "LP-001", "M-101", raw)
     r = v.validate(row)
     assert not r.ok  # Result: caller decides, cannot ignore .ok
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError) as exc:
         parse_days_or_raise(raw)
+    assert r.error == str(exc.value)

@@ -1,0 +1,12 @@
+caught: simulated failure after raw allocation
+
+=================================================================
+==1478==ERROR: LeakSanitizer: detected memory leaks
+
+Direct leak of 1 byte(s) in 1 object(s) allocated from:
+    #0 0x7f44ccc66778 in operator new(unsigned long) ../../../../src/libsanitizer/asan/asan_new_delete.cpp:95
+    #1 0x561d5db7733d in rawPointerErrorPath cpp/tests/leak_demo.cpp:27
+    #2 0x561d5db7763a in main cpp/tests/leak_demo.cpp:47
+    #3 0x7f44cc621ca7  (/lib/x86_64-linux-gnu/libc.so.6+0x29ca7) (BuildId: c495b62edadd6c356265942ec1282d98058a7b41)
+
+SUMMARY: AddressSanitizer: 1 byte(s) leaked in 1 allocation(s).

@@ -12,8 +12,11 @@
 #include "pinjamlab/service/database.hpp"
 #include "pinjamlab/service/txn_guard.hpp"
 
+#include <limits>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 namespace pinjamlab {
 
@@ -37,6 +40,42 @@ public:
         return it == roster_.end() ? nullptr : &it->second;
     }
 
+    // Reserve an available equipment item for a known member. A second
+    // member cannot replace an existing reservation.
+    void reserveEquipment(const std::string& tag, const std::string& memberId) {
+        auto eqIt = catalog_.find(tag);
+        if (eqIt == catalog_.end()) throw UnknownAssetTag(tag);
+
+        auto memIt = roster_.find(memberId);
+        if (memIt == roster_.end()) throw UnknownMember(memberId);
+
+        eqIt->second.reserveFor(memberId);
+    }
+
+    // Fine is calculated in integer cents to avoid floating-point currency
+    // errors. Negative inputs are programmer/caller contract violations;
+    // exceeding the configured cap is a typed domain failure.
+    [[nodiscard]] long long calculateFineCents(
+        const Loan& loan, int overdueDays, long long dailyRateCents,
+        long long capCents) const {
+        if (overdueDays < 0 || dailyRateCents < 0 || capCents < 0) {
+            throw std::invalid_argument("fine inputs must not be negative");
+        }
+
+        long long calculated = 0;
+        if (overdueDays > 0 && dailyRateCents >
+            std::numeric_limits<long long>::max() / overdueDays) {
+            calculated = std::numeric_limits<long long>::max();
+        } else {
+            calculated = static_cast<long long>(overdueDays) * dailyRateCents;
+        }
+
+        if (calculated > capCents) {
+            throw FineCapReached(loan.id(), calculated, capCents);
+        }
+        return calculated;
+    }
+
     // The failure cascade, guard by guard. Every check below happens BEFORE
     // any mutation, so no rollback is ever needed for the current guard set
     // -- the TxnGuard exists for the mutation step itself, to keep the
@@ -55,6 +94,9 @@ public:
         Member& mem = memIt->second;
 
         if (!eq.isAvailable()) throw EquipmentUnavailable(tag);
+        if (!eq.reservedBy().empty() && eq.reservedBy() != memberId) {
+            throw ReservationConflict(tag, eq.reservedBy(), memberId);
+        }
         if (!mem.canBorrow()) throw QuotaExceeded(mem.activeLoans(), mem.maxLoans());
 
         TxnGuard txn(db_);

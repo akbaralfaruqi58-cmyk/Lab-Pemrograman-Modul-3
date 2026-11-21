@@ -43,10 +43,15 @@ static int parseDaysOrThrow(const std::string& raw) {
     bool neg = false;
     if (raw[0] == '+' || raw[0] == '-') { neg = (raw[0] == '-'); i = 1; }
     if (i == raw.size()) throw std::invalid_argument("days is not a number: " + raw);
+    const long long limit = neg ? 2147483648LL : 2147483647LL;
     long long value = 0;
     for (; i < raw.size(); ++i) {
-        if (raw[i] < '0' || raw[i] > '9') throw std::invalid_argument("days is not a number: " + raw);
-        value = value * 10 + (raw[i] - '0');
+        if (raw[i] < '0' || raw[i] > '9')
+            throw std::invalid_argument("days is not a number: " + raw);
+        const int digit = raw[i] - '0';
+        if (value > (limit - digit) / 10)
+            throw std::invalid_argument("days is outside supported integer range: " + raw);
+        value = value * 10 + digit;
     }
     const int days = static_cast<int>(neg ? -value : value);
     if (days <= 0) throw std::invalid_argument("days must be positive, got " + std::to_string(days));
@@ -64,19 +69,20 @@ TEST_CASE("From-scratch match: Result and throwing agree on well-formed input") 
 
 TEST_CASE("From-scratch match: Result and throwing agree on every malformed input") {
     Validator v;
-    const std::string malformed[] = {"abc", "-3", "0", ""};
+    const std::string malformed[] = {"abc", "-3", "0", "", "2147483648"};
     for (const auto& raw : malformed) {
         RawRow row{1, "LP-001", "M-101", raw};
         const auto r = v.validate(row);
         REQUIRE(!r.ok());  // Result: caller decides, cannot ignore ok()
 
-        bool threw = false;
+        std::string throwingError;
         try {
             (void)parseDaysOrThrow(raw);
-        } catch (const std::invalid_argument&) {
-            threw = true;  // throwing: caller who forgets try/catch still compiles
+        } catch (const std::invalid_argument& e) {
+            throwingError = e.what();
         }
-        REQUIRE(threw);
+        REQUIRE(!throwingError.empty());
+        REQUIRE(r.error() == throwingError);
     }
 }
 

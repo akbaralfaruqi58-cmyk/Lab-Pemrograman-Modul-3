@@ -44,6 +44,32 @@ class EquipmentUnavailable(LoanError):
         self.tag = tag
 
 
+class ReservationConflict(LoanError):
+    """The equipment is reserved by a different member."""
+
+    def __init__(self, tag: str, reserved_by: str, requested_by: str) -> None:
+        super().__init__(
+            f"Reservation conflict for {tag}: reserved by {reserved_by}, "
+            f"requested by {requested_by}"
+        )
+        self.tag = tag
+        self.reserved_by = reserved_by
+        self.requested_by = requested_by
+
+
+class FineCapReached(LoanError):
+    """The calculated fine is higher than the configured cap."""
+
+    def __init__(self, loan_id: str, calculated_fine_cents: int, cap_cents: int) -> None:
+        super().__init__(
+            f"Fine cap reached for {loan_id}: calculated {calculated_fine_cents} "
+            f"cents, cap {cap_cents} cents"
+        )
+        self.loan_id = loan_id
+        self.calculated_fine_cents = calculated_fine_cents
+        self.cap_cents = cap_cents
+
+
 class QuotaExceeded(LoanError):
     def __init__(self, active: int, limit: int) -> None:
         super().__init__(f"Loan quota exceeded: {active} active, limit {limit}")

@@ -7,6 +7,7 @@
 
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace pinjamlab {
 
@@ -59,6 +60,40 @@ public:
     explicit EquipmentUnavailable(std::string tag)
         : LoanError("Equipment already on loan: " + tag), tag_(std::move(tag)) {}
     [[nodiscard]] const std::string& tag() const noexcept { return tag_; }
+};
+
+// A reservation belongs to one member. The structured identifiers let the
+// app layer explain who holds the reservation and who attempted the borrow.
+class ReservationConflict : public LoanError {
+    std::string tag_;
+    std::string reservedBy_;
+    std::string requestedBy_;
+public:
+    ReservationConflict(std::string tag, std::string reservedBy, std::string requestedBy)
+        : LoanError("Reservation conflict for " + tag + ": reserved by " + reservedBy +
+                    ", requested by " + requestedBy),
+          tag_(std::move(tag)), reservedBy_(std::move(reservedBy)),
+          requestedBy_(std::move(requestedBy)) {}
+    [[nodiscard]] const std::string& tag() const noexcept { return tag_; }
+    [[nodiscard]] const std::string& reservedBy() const noexcept { return reservedBy_; }
+    [[nodiscard]] const std::string& requestedBy() const noexcept { return requestedBy_; }
+};
+
+// Raised when the calculated fine would exceed the configured cap.
+class FineCapReached : public LoanError {
+    std::string loanId_;
+    long long calculatedFineCents_;
+    long long capCents_;
+public:
+    FineCapReached(std::string loanId, long long calculatedFineCents, long long capCents)
+        : LoanError("Fine cap reached for " + loanId + ": calculated " +
+                    std::to_string(calculatedFineCents) + " cents, cap " +
+                    std::to_string(capCents) + " cents"),
+          loanId_(std::move(loanId)), calculatedFineCents_(calculatedFineCents),
+          capCents_(capCents) {}
+    [[nodiscard]] const std::string& loanId() const noexcept { return loanId_; }
+    [[nodiscard]] long long calculatedFineCents() const noexcept { return calculatedFineCents_; }
+    [[nodiscard]] long long capCents() const noexcept { return capCents_; }
 };
 
 class QuotaExceeded : public LoanError {

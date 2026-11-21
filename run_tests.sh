@@ -1,13 +1,7 @@
 #!/usr/bin/env bash
-# ==============================================================================
-# PinjamLab Module 3: one command -- build, C++ tests, Python tests, AND the
-# dependency-rule purity check (Lab 3.2: "Add the purity check to run_tests.sh
-# so a violation fails the build.").
-#
-# Like Module 2's script and unlike Module 1's, this one FAILS (non-zero exit)
-# when a toolchain is missing or a check fails -- it never prints a success
-# banner over a step that did not actually run.
-# ==============================================================================
+# PinjamLab Module 3: complete verification for Labs 1–2.
+# The script fails loudly if purity, C++ tests, golden outputs, Python tests,
+# or cleanup/leak evidence checks do not pass.
 set -euo pipefail
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,13 +17,9 @@ echo " [PinjamLab M3] $("$CXX" --version | head -1)"
 echo " [PinjamLab M3] $("$PY" --version 2>&1)"
 echo "================================================================================"
 
-# ---- 1/5: the dependency-rule purity check -----------------------------------
-# domain/ may not include, import, or name anything from io, service or app.
-# The practical test is a grep: if domain/ contains fstream/iostream/sstream,
-# std::cout/cerr/cin, or the word csv (C++); or a module-level csv/sys import,
-# print(, or open( (Python) -- OUTSIDE a comment -- the rule is broken.
+# ---- 1/6: dependency rule -----------------------------------------------------
 echo ""
-echo ">>> [1/5] Dependency-rule purity check (domain/ must not touch io)"
+echo ">>> [1/6] Dependency-rule purity check"
 check_purity() {
     local dir="$1" lang="$2" found=0 pattern
     if [ "$lang" = "cpp" ]; then
@@ -38,57 +28,121 @@ check_purity() {
         pattern='^[[:space:]]*(import|from)[[:space:]]+(csv|sys)\b|\bprint\(|\bopen\('
     fi
     while IFS= read -r hit; do
-        local file="${hit%%:*}" rest="${hit#*:}"
-        local lineno="${rest%%:*}" content="${rest#*:}"
-        local trimmed; trimmed="$(echo "$content" | sed -E 's/^[[:space:]]*//')"
+        local file="${hit%%:*}" rest="${hit#*:}" content trimmed
+        rest="${rest#*:}"
+        content="$rest"
+        trimmed="$(echo "$content" | sed -E 's/^[[:space:]]*//')"
         if [ "$lang" = "cpp" ]; then
             case "$trimmed" in '//'*) continue ;; esac
         else
             case "$trimmed" in '#'*) continue ;; esac
         fi
-        echo "  PURITY VIOLATION: $file:$lineno: $content"
+        echo "  PURITY VIOLATION: $file: $content"
         found=1
-    done < <(grep -rnE --exclude-dir=__pycache__ --exclude='*.pyc' "$pattern" "$dir" 2>/dev/null)
-    return $found
+    done < <(grep -rnE --exclude-dir=__pycache__ --exclude='*.pyc' "$pattern" "$dir" 2>/dev/null || true)
+    return "$found"
 }
 purity_failed=0
 check_purity cpp/include/pinjamlab/domain cpp || purity_failed=1
 check_purity py/pinjamlab/domain py || purity_failed=1
 if [ "$purity_failed" -ne 0 ]; then
-    echo "FATAL: domain/ is no longer pure. See violations above."
+    echo "FATAL: domain/ is no longer pure."
     exit 3
 fi
-echo "  clean: domain/ contains no io, no console, no CSV, in either language."
+echo "  clean: domain/ has no file, console, or CSV dependencies."
 
-# ---- 2/5: build the C++ suites -----------------------------------------------
+# ---- 2/6: build C++ suites ----------------------------------------------------
 echo ""
-echo ">>> [2/5] Building C++20 tests (-Wall -Wextra -Werror)"
+echo ">>> [2/6] Building C++20 tests (-Wall -Wextra -Werror)"
 for t in test_errors test_raii test_result test_app; do
     "$CXX" -std=c++20 -Wall -Wextra -Werror \
-           -Icpp/include -Icpp/tests "cpp/tests/$t.cpp" -o "bin/$t"
+        -Icpp/include -Icpp/tests "cpp/tests/$t.cpp" -o "bin/$t"
 done
 "$CXX" -std=c++20 -Wall -Wextra -Werror -Icpp/include cpp/app/main.cpp -o bin/pinjamlab_cli
+"$CXX" -std=c++20 -Wall -Wextra -Werror cpp/tests/leak_demo.cpp -o bin/leak_demo
 
-# ---- 3/5: run the C++ suites --------------------------------------------------
+# ---- 3/6: run C++ suites ------------------------------------------------------
 echo ""
-echo ">>> [3/5] Running C++20 test suites"
+echo ">>> [3/6] Running C++20 test suites"
 for t in test_errors test_raii test_result test_app; do
     "./bin/$t"
 done
 
-# ---- 4/5: the cross-language golden-file check -------------------------------
+# ---- 4/6: cross-language golden files ---------------------------------------
 echo ""
-echo ">>> [4/5] Cross-language golden file: C++ CLI vs sample-data/expected-output.txt"
-./bin/pinjamlab_cli sample-data/bad-requests.csv 2>bin/cpp_stderr.txt 1>/dev/null || true
-diff bin/cpp_stderr.txt sample-data/expected-output.txt
-echo "  match: C++ CLI output is byte-for-byte identical to expected-output.txt"
+echo ">>> [4/6] Checking fixed and student-authored CSV outputs"
+check_cli_output() {
+    local csv="$1" expected="$2" stderr_file="$3" expected_lf="$4" status
+    set +e
+    ./bin/pinjamlab_cli "$csv" > /dev/null 2> "$stderr_file"
+    status=$?
+    set -e
+    if [ "$status" -ne 1 ]; then
+        echo "FATAL: expected CLI exit code 1 for $csv, got $status"
+        return 1
+    fi
+    # Normalize CRLF from Windows checkouts before byte-for-byte comparison.
+    sed 's/\r$//' "$expected" > "$expected_lf"
+    sed 's/\r$//' "$stderr_file" > "${stderr_file}.lf"
+    diff "${stderr_file}.lf" "$expected_lf"
+    echo "  match: $csv -> $expected"
+}
+check_cli_output sample-data/bad-requests.csv sample-data/expected-output.txt \
+    bin/cpp_stderr_fixed.txt bin/expected_fixed_lf.txt
+check_cli_output sample-data/my-bad-requests.csv sample-data/my-expected-output.txt \
+    bin/cpp_stderr_custom.txt bin/expected_custom_lf.txt
 
-# ---- 5/5: run the Python suite, including the SAME golden-file check --------
+# ---- 5/6: Python suites -------------------------------------------------------
 echo ""
-echo ">>> [5/5] Running Python 3.12 test suite (pytest)"
+echo ">>> [5/6] Running Python test suite"
 PYTHONPATH=py "$PY" -m pytest py/tests -q
+
+# ---- 6/6: leak reproduction and RAII fix -------------------------------------
+echo ""
+echo ">>> [6/6] Defect B: reproduce raw-pointer leak, then verify RAII cleanup"
+asan_available=0
+if "$CXX" -std=c++20 -Wall -Wextra -Werror -fsanitize=address \
+      -fno-omit-frame-pointer -g cpp/tests/leak_demo.cpp -o bin/leak_demo_asan \
+      >bin/asan_build.txt 2>&1; then
+    set +e
+    ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 ./bin/leak_demo_asan raw \
+        >bin/asan_before.txt 2>&1
+    raw_status=$?
+    set -e
+    if [ "$raw_status" -ne 0 ] && \
+       grep -Eq 'ERROR: LeakSanitizer: detected memory leaks|Direct leak' bin/asan_before.txt; then
+        if ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 ./bin/leak_demo_asan raii \
+             >bin/asan_after.txt 2>&1; then
+            if ! grep -Eq 'ERROR: LeakSanitizer: detected memory leaks|Direct leak' bin/asan_after.txt; then
+                asan_available=1
+                echo "  reproduced: ASan reports the raw-pointer leak (bin/asan_before.txt)"
+                echo "  fixed: unique_ptr path exits cleanly (bin/asan_after.txt)"
+            fi
+        fi
+    fi
+fi
+
+if [ "$asan_available" -ne 1 ]; then
+    # Some MinGW/Windows GCC distributions do not include a working libasan.
+    # The module README permits a destructor/live-object counter as fallback.
+    set +e
+    ./bin/leak_demo raw >bin/leak_before_fallback.txt 2>&1
+    raw_status=$?
+    ./bin/leak_demo raii >bin/leak_after_fallback.txt 2>&1
+    raii_status=$?
+    set -e
+    if [ "$raw_status" -ne 1 ] || [ "$raii_status" -ne 0 ] || \
+       ! grep -q 'live objects after exception: 1' bin/leak_before_fallback.txt || \
+       ! grep -q 'live objects after exception: 0' bin/leak_after_fallback.txt; then
+        echo "FATAL: leak fallback did not show raw=1 live object and RAII=0."
+        cat bin/leak_before_fallback.txt bin/leak_after_fallback.txt
+        exit 4
+    fi
+    echo "  ASan not available; live-object counter confirms raw=1, unique_ptr=0."
+    echo "  evidence: bin/leak_before_fallback.txt and bin/leak_after_fallback.txt"
+fi
 
 echo ""
 echo "================================================================================"
-echo " [SUCCESS] Purity check, C++ suites, golden file, and Python suite all passed."
+echo " [SUCCESS] Lab 2 checks passed: exceptions, Result, cleanup, diagnostics, and leak evidence."
 echo "================================================================================"

@@ -8,7 +8,9 @@ from ..domain.loan import Loan
 from ..domain.loan_error import (
     EquipmentUnavailable,
     InvalidLoanDuration,
+    FineCapReached,
     QuotaExceeded,
+    ReservationConflict,
     UnknownAssetTag,
     UnknownMember,
 )
@@ -41,6 +43,32 @@ class LoanService:
     def ledger(self) -> Database:
         return self._db
 
+    def reserve_equipment(self, tag: str, member_id: str) -> None:
+        equipment = self._catalog.get(tag)
+        if equipment is None:
+            raise UnknownAssetTag(tag)
+
+        member = self._roster.get(member_id)
+        if member is None:
+            raise UnknownMember(member_id)
+
+        equipment.reserve_for(member_id)
+
+    def calculate_fine_cents(
+        self, loan: Loan, overdue_days: int, daily_rate_cents: int, cap_cents: int
+    ) -> int:
+        if overdue_days < 0 or daily_rate_cents < 0 or cap_cents < 0:
+            raise ValueError("fine inputs must not be negative")
+
+        max_cents = 9223372036854775807
+        if overdue_days > 0 and daily_rate_cents > max_cents // overdue_days:
+            calculated = max_cents
+        else:
+            calculated = overdue_days * daily_rate_cents
+        if calculated > cap_cents:
+            raise FineCapReached(loan.loan_id, calculated, cap_cents)
+        return calculated
+
     def borrow(self, tag: str, member_id: str, days: int) -> Loan:
         equipment = self._catalog.get(tag)
         if equipment is None:
@@ -53,10 +81,11 @@ class LoanService:
         if days > MAX_LOAN_DAYS:
             raise InvalidLoanDuration(days, MAX_LOAN_DAYS)
 
-        # Checked before any mutation, same order as the C++ side:
-        # availability, then quota.
+        # Reservation ownership is checked before any mutation.
         if not equipment.is_available():
             raise EquipmentUnavailable(tag)
+        if equipment.reserved_by is not None and equipment.reserved_by != member_id:
+            raise ReservationConflict(tag, equipment.reserved_by, member_id)
         if not member.can_borrow():
             raise QuotaExceeded(member.active_loans, member.max_loans)
 

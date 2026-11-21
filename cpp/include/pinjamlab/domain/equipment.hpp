@@ -18,6 +18,7 @@ class Equipment {
     std::string tag_;
     std::string model_;
     EquipmentState state_ = EquipmentState::Available;
+    std::string reservedBy_;
 
 public:
     Equipment(std::string tag, std::string model)
@@ -27,10 +28,20 @@ public:
     [[nodiscard]] const std::string& model() const noexcept { return model_; }
     [[nodiscard]] EquipmentState state() const noexcept { return state_; }
     [[nodiscard]] bool isAvailable() const noexcept { return state_ == EquipmentState::Available; }
+    [[nodiscard]] const std::string& reservedBy() const noexcept { return reservedBy_; }
+
+    void reserveFor(const std::string& memberId) {
+        if (!reservedBy_.empty() && reservedBy_ != memberId) {
+            throw ReservationConflict(tag_, reservedBy_, memberId);
+        }
+        if (!isAvailable()) throw EquipmentUnavailable(tag_);
+        reservedBy_ = memberId;
+    }
 
     void markLoaned() {
         if (!isAvailable()) throw EquipmentUnavailable(tag_);
         state_ = EquipmentState::Loaned;
+        reservedBy_.clear();
     }
 
     void markReturned() { state_ = EquipmentState::Available; }
