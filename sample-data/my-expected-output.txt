@@ -1,0 +1,5 @@
+row 1: tag must not be whitespace-only
+row 2: memberId must not be whitespace-only
+row 3: tag must use canonical format LP-NNN, got: lp-001
+row 4: memberId must use canonical format M-NNN, got: m-101
+row 5: days is outside supported integer range: 2147483648
